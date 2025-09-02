@@ -892,6 +892,33 @@ function extractLinksFromText(text) {
 }
 
 // Enhanced Python-based link extraction
+async function extractLinksWithPython(filePath) {
+    return new Promise((resolve, reject) => {
+        console.log(`🐍 Running Python link extraction on: ${filePath}`);
+        
+        const pythonProcess = spawn('python', [
+            path.join(__dirname, 'link_extractor.py'),
+            filePath
+        ]);
+
+        let output = '';
+        let errorOutput = '';
+
+        pythonProcess.stdout.on('data', (data) => {
+            output += data.toString();
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            errorOutput += data.toString();
+        });
+
+        pythonProcess.on('close', (code) => {
+            if (code !== 0) {
+                console.error(`❌ Python script failed with code ${code}`);
+                console.error(`Error output: ${errorOutput}`);
+                resolve({ linkedin: null, github: null, error: errorOutput });
+                return;
+            }
 
             try {
                 const result = JSON.parse(output.trim());
