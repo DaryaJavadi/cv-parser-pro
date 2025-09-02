@@ -749,7 +749,7 @@ async function extractTextFromDOCX(buffer) {
         }
         
         // Also look for URL patterns in the text content
-        const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
+        const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/g;
         const foundUrls = textContent.match(urlRegex) || [];
         extractedLinks = [...extractedLinks, ...foundUrls];
         
@@ -1089,7 +1089,7 @@ function database.saveCV(cvData) {
                 total_years_experience, highest_university_degree, university_name,
                 courses_completed, summary, experience_data, education_data, skills_data,
                 projects_data, awards_data, volunteer_work_data, metadata_data, original_language
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         stmt.run(
