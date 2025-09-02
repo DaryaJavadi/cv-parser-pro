@@ -1078,7 +1078,7 @@ async function parseWithGemini(cvText, isExperience = false) {
 }
 
 // Database operations
-function database.saveCV(cvData) {
+function saveCVToDatabase(cvData) {
     return new Promise((resolve, reject) => {
         console.log(`💾 Saving CV to database: ${cvData.name || 'Unknown'}`);
         
@@ -1132,7 +1132,7 @@ function database.saveCV(cvData) {
     });
 }
 
-function database.getAllCVs() {
+function getAllCVsFromDatabase() {
     return new Promise((resolve, reject) => {
         database.db.prepare("SELECT * FROM cvs ORDER BY created_at DESC", (err, rows) => {
             if (err) {
@@ -1291,7 +1291,7 @@ app.post('/api/parse-cvs', upload.array('files'), async (req, res) => {
                 };
                 
                 console.log('💾 Saving to database...');
-                const cvId = await database.saveCV(combinedData);
+                const cvId = await saveCVToDatabase(combinedData);
                 combinedData.id = cvId;
                 
                 results.push(combinedData);
@@ -1357,7 +1357,7 @@ app.post('/api/parse-cvs', upload.array('files'), async (req, res) => {
 app.get('/api/cvs', async (req, res) => {
     try {
         console.log('📊 Fetching all CVs from database...');
-        const cvs = await database.getAllCVs();
+        const cvs = await getAllCVsFromDatabase();
         res.json({
             success: true,
             data: cvs,
@@ -1996,7 +1996,7 @@ app.get('/api/export/excel', async (req, res) => {
         console.log('📊 Excel export request received');
         
         // Get all CVs from database
-        const cvs = await database.getAllCVs();
+        const cvs = await getAllCVsFromDatabase();
         
         if (cvs.length === 0) {
             return res.status(400).json({
@@ -2113,7 +2113,7 @@ app.post('/api/extract-links-bulk', async (req, res) => {
         console.log('🔗 Bulk link extraction request received');
         
         // Get all CVs from database
-        const cvs = await database.getAllCVs();
+        const cvs = await getAllCVsFromDatabase();
         
         if (cvs.length === 0) {
             return res.status(400).json({
