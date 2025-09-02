@@ -749,7 +749,7 @@ async function extractTextFromDOCX(buffer) {
         }
         
         // Also look for URL patterns in the text content
-        const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/g;
+        const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/g;
         const foundUrls = textContent.match(urlRegex) || [];
         extractedLinks = [...extractedLinks, ...foundUrls];
         
@@ -775,7 +775,7 @@ async function extractTextFromTXT(buffer) {
         let textContent = buffer.toString('utf8');
         
         // Extract URL patterns from text content
-        const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
+        const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/g;
         const foundUrls = textContent.match(urlRegex) || [];
         
         if (foundUrls.length > 0) {
@@ -842,8 +842,6 @@ function extractLinksFromText(text) {
     while ((m = bareRegex.exec(text)) !== null) {
         const candidate = (m[1] || '').trim();
         if (!candidate) continue;
-        // Skip obvious non-URLs
-        if (candidate.length < 4) continue;
         const normalized = candidate.startsWith('http://') || candidate.startsWith('https://')
             ? candidate
             : `https://${candidate}`;
@@ -883,7 +881,6 @@ function extractLinksFromText(text) {
     for (const url of urls) {
         const lower = url.toLowerCase();
         if (lower.includes('linkedin.com') || lower.includes('github.com')) continue;
-        // Heuristic: prefer personal domains over generic file hosts
         website = url;
         break;
     }
@@ -1082,7 +1079,7 @@ function saveCVToDatabase(cvData) {
     return new Promise((resolve, reject) => {
         console.log(`💾 Saving CV to database: ${cvData.name || 'Unknown'}`);
         
-        const stmt = db.prepare(`
+        const stmt = database.db.prepare(`
             INSERT INTO cvs (
                 filename, name, email, phone, address, linkedin, github, website,
                 professional_specialty, primary_experience_years, secondary_experience_fields,
@@ -1403,7 +1400,7 @@ app.delete('/api/cvs/:id', (req, res) => {
 app.delete('/api/cvs', (req, res) => {
     console.log('🗑️ Clearing all CVs from database...');
 
-    db.serialize(() => {
+    database.db.serialize(() => {
         database.db.prepare("DELETE FROM cvs", function(err) {
             if (err) {
                 console.error('❌ Clear CVs error:', err.message);
@@ -2150,7 +2147,7 @@ app.post('/api/extract-links-bulk', async (req, res) => {
                     
                     // Update database if new links found
                     if (pythonLinks.linkedin || pythonLinks.github) {
-                        const updateStmt = db.prepare(`
+                        const updateStmt = database.db.prepare(`
                             UPDATE cvs SET 
                                 linkedin = COALESCE(?, linkedin),
                                 github = COALESCE(?, github),
@@ -2268,7 +2265,7 @@ app.use('*', (req, res) => {
 app.listen(PORT, () => {
     console.log('\n🚀 Enhanced CV Parser Pro Server - RENDER DEPLOYMENT');
     console.log(`📍 Server running on port ${PORT}`);
-    console.log(`📊 Database: ${dbPath}`);
+    console.log(`📊 Database: ${database.dbPath}`);
     console.log(`🤖 Gemini API: ${GEMINI_API_KEY ? '✅ Configured' : '❌ Not configured'}`);
     console.log(`📁 Uploads directory: ${uploadsDir}`);
     console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
@@ -2302,7 +2299,7 @@ app.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\n🛑 Shutting down server...');
-    db.close((err) => {
+    database.db.close((err) => {
         if (err) {
             console.error('❌ Error closing database:', err.message);
         } else {
