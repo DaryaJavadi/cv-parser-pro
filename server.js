@@ -4,28 +4,14 @@ require('dotenv').config();
 const express = require('express');
 const { IntelligentCandidateMatcher } = require('./candidate-matcher');
 const multer = require('multer');
-const sqlite3 = require('sqlite3').verbose();
+const CVDatabase = require('./database');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { spawn } = require('child_process');
+
 const CVExcelExporter = require('./excel_exporter');
 // Sentence embedding model (Node.js alternative to SentenceTransformer)
-let transformers;
-let embeddingPipeline; // lazy-initialized
-// PDF annotations extractor
-let pdfjsLib;
-try {
-    pdfjsLib = require('pdfjs-dist');
-    // Configure worker to use node build
-    if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
-        // In Node, workerSrc is not required, but keep for compatibility
-        pdfjsLib.GlobalWorkerOptions.workerSrc = require('pdfjs-dist/build/pdf.worker.js');
-    }
-} catch (e) {
-    console.warn('⚠️ pdfjs-dist not installed; PDF link annotations will not be extracted.');
-}
 const rateLimit = require('express-rate-limit');
 
 const app = express();
@@ -487,55 +473,10 @@ const upload = multer({
 });
 
 // Initialize SQLite database
-const dbPath = path.join(__dirname, 'cvs.db');
-console.log(`📊 Database path: ${dbPath}`);
+// Initialize database
+const database = new CVDatabase();
 
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('❌ Error opening database:', err);
-        process.exit(1);
-    }
-    console.log('📊 Connected to SQLite database');
-});
-
-// Create tables with enhanced structure
-db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS cvs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        filename TEXT NOT NULL,
-        name TEXT,
-        email TEXT,
-        phone TEXT,
-        address TEXT,
-        linkedin TEXT,
-        github TEXT,
-        website TEXT,
-        professional_specialty TEXT,
-        primary_experience_years REAL,
-        secondary_experience_fields TEXT,
-        total_years_experience REAL,
-        highest_university_degree TEXT,
-        university_name TEXT,
-        courses_completed TEXT,
-        summary TEXT,
-        experience_data TEXT,
-        education_data TEXT,
-        skills_data TEXT,
-        projects_data TEXT,
-        awards_data TEXT,
-        volunteer_work_data TEXT,
-        metadata_data TEXT,
-        original_language TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`, (err) => {
-        if (err) {
-            console.error('❌ Error creating table:', err);
-        } else {
-            console.log('✅ CVs table ready');
-        }
-    });
-});
+// Database tables are initialized in CVDatabase constructor
 
 // Language detection function with Azerbaijani support
 function detectLanguage(text) {
@@ -951,33 +892,6 @@ function extractLinksFromText(text) {
 }
 
 // Enhanced Python-based link extraction
-async function extractLinksWithPython(filePath) {
-    return new Promise((resolve, reject) => {
-        console.log(`🐍 Running Python link extraction on: ${filePath}`);
-        
-        const pythonProcess = spawn('python', [
-            path.join(__dirname, 'link_extractor.py'),
-            filePath
-        ]);
-
-        let output = '';
-        let errorOutput = '';
-
-        pythonProcess.stdout.on('data', (data) => {
-            output += data.toString();
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-            errorOutput += data.toString();
-        });
-
-        pythonProcess.on('close', (code) => {
-            if (code !== 0) {
-                console.error(`❌ Python script failed with code ${code}`);
-                console.error(`Error output: ${errorOutput}`);
-                resolve({ linkedin: null, github: null, error: errorOutput });
-                return;
-            }
 
             try {
                 const result = JSON.parse(output.trim());
@@ -1137,7 +1051,7 @@ async function parseWithGemini(cvText, isExperience = false) {
 }
 
 // Database operations
-function saveCVToDatabase(cvData) {
+function database.saveCV(cvData) {
     return new Promise((resolve, reject) => {
         console.log(`💾 Saving CV to database: ${cvData.name || 'Unknown'}`);
         
@@ -1191,9 +1105,9 @@ function saveCVToDatabase(cvData) {
     });
 }
 
-function getAllCVsFromDatabase() {
+function database.getAllCVs() {
     return new Promise((resolve, reject) => {
-        db.all("SELECT * FROM cvs ORDER BY created_at DESC", (err, rows) => {
+        database.db.prepare("SELECT * FROM cvs ORDER BY created_at DESC", (err, rows) => {
             if (err) {
                 console.error('❌ Database query error:', err.message);
                 reject(err);
@@ -1350,7 +1264,7 @@ app.post('/api/parse-cvs', upload.array('files'), async (req, res) => {
                 };
                 
                 console.log('💾 Saving to database...');
-                const cvId = await saveCVToDatabase(combinedData);
+                const cvId = await database.saveCV(combinedData);
                 combinedData.id = cvId;
                 
                 results.push(combinedData);
@@ -1416,7 +1330,7 @@ app.post('/api/parse-cvs', upload.array('files'), async (req, res) => {
 app.get('/api/cvs', async (req, res) => {
     try {
         console.log('📊 Fetching all CVs from database...');
-        const cvs = await getAllCVsFromDatabase();
+        const cvs = await database.getAllCVs();
         res.json({
             success: true,
             data: cvs,
@@ -1440,7 +1354,7 @@ app.delete('/api/cvs/:id', (req, res) => {
         return res.status(400).json({ error: 'Invalid CV ID' });
     }
     
-    db.run("DELETE FROM cvs WHERE id = ?", [cvId], function(err) {
+    database.db.prepare("DELETE FROM cvs WHERE id = ?", [cvId], function(err) {
         if (err) {
             console.error('❌ Delete CV error:', err.message);
             res.status(500).json({ error: 'Internal server error' });
@@ -1463,7 +1377,7 @@ app.delete('/api/cvs', (req, res) => {
     console.log('🗑️ Clearing all CVs from database...');
 
     db.serialize(() => {
-        db.run("DELETE FROM cvs", function(err) {
+        database.db.prepare("DELETE FROM cvs", function(err) {
             if (err) {
                 console.error('❌ Clear CVs error:', err.message);
                 return res.status(500).json({ error: 'Internal server error' });
@@ -1473,7 +1387,7 @@ app.delete('/api/cvs', (req, res) => {
             console.log(`✅ Cleared ${deleted} CVs from database`);
 
             // Reset AUTOINCREMENT sequence so IDs start from 1 next time
-            db.run("DELETE FROM sqlite_sequence WHERE name='cvs'", function(seqErr) {
+            database.db.prepare("DELETE FROM sqlite_sequence WHERE name='cvs'", function(seqErr) {
                 if (seqErr) {
                     console.warn('⚠️ Could not reset sqlite_sequence:', seqErr.message);
                 } else {
@@ -1481,7 +1395,7 @@ app.delete('/api/cvs', (req, res) => {
                 }
 
                 // Optional: reclaim space
-                db.run('VACUUM', function(vacErr) {
+                database.db.prepare('VACUUM', function(vacErr) {
                     if (vacErr) {
                         console.warn('⚠️ VACUUM failed:', vacErr.message);
                     }
@@ -1508,7 +1422,7 @@ app.get('/api/cvs/:id', async (req, res) => {
             return res.status(400).json({ error: 'Invalid CV ID' });
         }
 
-        db.get("SELECT * FROM cvs WHERE id = ?", [cvId], (err, row) => {
+        database.db.prepare("SELECT * FROM cvs WHERE id = ?", [cvId], (err, row) => {
             if (err) {
                 console.error('❌ Get CV details error:', err.message);
                 res.status(500).json({ error: 'Internal server error' });
@@ -2055,7 +1969,7 @@ app.get('/api/export/excel', async (req, res) => {
         console.log('📊 Excel export request received');
         
         // Get all CVs from database
-        const cvs = await getAllCVsFromDatabase();
+        const cvs = await database.getAllCVs();
         
         if (cvs.length === 0) {
             return res.status(400).json({
@@ -2172,7 +2086,7 @@ app.post('/api/extract-links-bulk', async (req, res) => {
         console.log('🔗 Bulk link extraction request received');
         
         // Get all CVs from database
-        const cvs = await getAllCVsFromDatabase();
+        const cvs = await database.getAllCVs();
         
         if (cvs.length === 0) {
             return res.status(400).json({

@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "npm install --production && npm rebuild sqlite3 --build-from-source",
-    "postinstall": "npm rebuild sqlite3 --build-from-source || echo 'SQLite3 rebuild failed, continuing...'",
+    "build": "npm install --production && npm rebuild better-sqlite3 --build-from-source",
+    "postinstall": "npm rebuild better-sqlite3 --build-from-source || echo 'better-sqlite3 rebuild failed, continuing...'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
