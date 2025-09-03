@@ -1446,7 +1446,10 @@ Example:
     </div>
     <script>
         // API Configuration
-        const API_BASE_URL = 'http://localhost:3000/api';
+        const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        const API_BASE_URL = isLocal
+            ? 'http://localhost:3000/api'
+            : `${window.location.origin.replace(/\/$/, '')}/api`;
 
         class CVParserApp {
             constructor() {
@@ -1524,37 +1527,35 @@ Example:
                 // Convert to month intervals
                 const toYM = (txt) => {
                     if (!txt) return null;
-                    const s = String(txt).trim().toLowerCase();
-                    if (!s) return null;
-                    if (/(present|current|now|ongoing)/i.test(s)) {
+                    const str = String(txt).trim();
+                    if (!str) return null;
+                    if (/(present|current|ongoing)/i.test(str)) {
                         const now = new Date();
                         return { y: now.getFullYear(), m: now.getMonth() + 1 };
                     }
                     let m;
                     // MM/YYYY
-                    if ((m = s.match(/^(\d{1,2})[\.\/-](\d{4})$/))) {
+                    if ((m = str.match(/^(\d{1,2})[\.\/-](\d{4})$/))) {
                         const mm = Math.max(1, Math.min(12, parseInt(m[1], 10)));
                         const yy = parseInt(m[2], 10);
                         return { y: yy, m: mm };
                     }
-                    // YYYY-MM or YYYY/M
-                    if ((m = s.match(/^(\d{4})[\/-](\d{1,2})$/))) {
-                        const yy = parseInt(m[1], 10);
-                        const mm = Math.max(1, Math.min(12, parseInt(m[2], 10)));
-                        return { y: yy, m: mm };
+                    // Try YYYY
+                    if (/^\d{4}$/.test(str)) {
+                        return new Date(parseInt(str, 10), 0, 1);
                     }
-                    // Month YYYY (English short/long)
+                    // Try Month YYYY
                     const months = {
                         january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12,
                         jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12
                     };
-                    const mmName = Object.keys(months).find(k => s.startsWith(k+" "));
+                    const mmName = Object.keys(months).find(k => str.startsWith(k+" "));
                     if (mmName) {
-                        const yMatch = s.match(/(19|20)\d{2}/);
-                        if (yMatch) return { y: parseInt(yMatch[0],10), m: months[mmName] };
+                        const yearMatch = str.match(/(19|20)\d{2}/);
+                        if (yearMatch) return { y: parseInt(yearMatch[0],10), m: months[mmName] };
                     }
                     // Fallback: just year
-                    if (/^(19|20)\d{2}$/.test(s)) return { y: parseInt(s,10), m: 1 };
+                    if (/^(19|20)\d{2}$/.test(str)) return { y: parseInt(str,10), m: 1 };
                     return null;
                 };
                 const monthsBetween = (a, b) => {
@@ -1566,7 +1567,7 @@ Example:
                 for (const e of edu) {
                     const start = toYM(e.start_date || e.start || (e.duration ? String(e.duration).split('-')[0] : ''));
                     const rawEnd = e.end_date || e.end || e.graduation_date || (e.duration ? String(e.duration).split('-')[1] : '');
-                    const end = /present|current|now|ongoing/i.test(String(rawEnd||'')) ? ( () => { const d=new Date(); return { y:d.getFullYear(), m:d.getMonth()+1 }; })() : toYM(rawEnd);
+                    const end = /present|current|ongoing/i.test(String(rawEnd||'')) ? ( () => { const d=new Date(); return { y:d.getFullYear(), m:d.getMonth()+1 }; })() : toYM(rawEnd);
                     if (start && end) intervals.push({ start, end });
                 }
                 if (!intervals.length) return 0;
@@ -1651,32 +1652,32 @@ Example:
                     if (present) return new Date();
                     // Try MM/YYYY
                     let m;
-                    if ((m = str.match(/^(\d{1,2})\/(\d{4})$/))) {
-                        const mm = Math.min(Math.max(parseInt(m[1], 10), 1), 12) - 1;
+                    if ((m = str.match(/^(\d{1,2})[\.\/-](\d{4})$/))) {
+                        const mm = Math.max(1, Math.min(12, parseInt(m[1], 10)));
                         const yy = parseInt(m[2], 10);
-                        return new Date(yy, mm, 1);
+                        return { y: yy, m: mm };
                     }
                     // Try YYYY
                     if (/^\d{4}$/.test(str)) {
                         return new Date(parseInt(str, 10), 0, 1);
                     }
                     // Try Month YYYY
-                    const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-                    const low = str.toLowerCase();
-                    for (let i = 0; i < months.length; i++) {
-                        if (low.includes(months[i])) {
-                            const yearMatch = low.match(/(19|20)\d{2}/);
-                            if (yearMatch) return new Date(parseInt(yearMatch[0], 10), i, 1);
-                        }
+                    const months = {
+                        january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12,
+                        jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12
+                    };
+                    const mmName = Object.keys(months).find(k => str.startsWith(k+" "));
+                    if (mmName) {
+                        const yMatch = str.match(/(19|20)\d{2}/);
+                        if (yMatch) return { y: parseInt(yMatch[0],10), m: months[mmName] };
                     }
-                    // Fallback Date constructor
-                    const d = new Date(str);
-                    return isNaN(d.getTime()) ? null : d;
+                    // Fallback: just year
+                    if (/^(19|20)\d{2}$/.test(s)) return { y: parseInt(s,10), m: 1 };
+                    return null;
                 };
                 const diffYears = (a, b) => {
                     if (!a || !b) return null;
-                    const months = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
-                    return Math.max(0, Math.round((months / 12) * 100) / 100);
+                    return Math.max(0, (b.y - a.y) * 12 + (b.m - a.m));
                 };
                 
                 cvs.forEach(cv => {
@@ -1711,21 +1712,35 @@ Example:
                         this.showStatus('parseStatus', 'No CVs to export', 'warning');
                         return;
                     }
+                    const excelData = this.convertToExcelData(cvs);
+                    
+                    // Create workbook using SheetJS
                     const wb = XLSX.utils.book_new();
-                    // Main sheet
-                    const mainRows = this.convertToExcelData(cvs);
-                    const mainWS = XLSX.utils.json_to_sheet(mainRows);
-                    XLSX.utils.book_append_sheet(wb, mainWS, 'CV Summary');
-                    // Education Periods sheet
-                    const eduRows = this.buildEducationPeriodsSheetData(cvs);
-                    const eduWS = XLSX.utils.json_to_sheet(eduRows);
-                    XLSX.utils.book_append_sheet(wb, eduWS, 'Education Periods');
-                    // Save
-                    XLSX.writeFile(wb, `cv_parser_export_${new Date().toISOString().slice(0,10)}.xlsx`);
-                    this.showStatus('parseStatus', '✅ Exported to Excel', 'success');
+                    const ws = XLSX.utils.json_to_sheet(excelData);
+                    
+                    // Auto-size columns
+                    const colWidths = [];
+                    const headers = Object.keys(excelData[0]);
+                    headers.forEach((header, i) => {
+                        const maxLength = Math.max(
+                            header.length,
+                            ...excelData.map(row => String(row[header] || '').length)
+                        );
+                        colWidths[i] = { wch: Math.min(maxLength + 2, 50) };
+                    });
+                    ws['!cols'] = colWidths;
+                    
+                    XLSX.utils.book_append_sheet(wb, ws, "All CVs Database");
+                    
+                    // Generate file and trigger download
+                    const fileName = `all_cvs_database_${new Date().toISOString().split('T')[0]}.xlsx`;
+                    XLSX.writeFile(wb, fileName);
+
+                    this.showExportResults(data.data);
+                    this.showStatus('databaseStatus', '✅ All CVs exported successfully!', 'success');
                 } catch (e) {
                     console.error('Excel export error:', e);
-                    this.showStatus('parseStatus', `❌ Export failed: ${e.message}`, 'error');
+                    this.showStatus('databaseStatus', `❌ Export failed: ${e.message}`, 'error');
                 }
             }
 
@@ -1874,17 +1889,13 @@ Example:
                         // Generate file and trigger download
                         const fileName = `all_cvs_database_${new Date().toISOString().split('T')[0]}.xlsx`;
                         XLSX.writeFile(wb, fileName);
-                        
+
                         this.showExportResults(data.data);
                         this.showStatus('databaseStatus', '✅ All CVs exported successfully!', 'success');
-                        this.createConfetti();
-                        this.playSuccessSound();
-                    } else {
-                        this.showStatus('databaseStatus', '⚠️ No CVs found in database', 'warning');
                     }
-                } catch (error) {
-                    console.error('Export all error:', error);
-                    this.showStatus('databaseStatus', '❌ Failed to export CVs', 'error');
+                } catch (e) {
+                    console.error('Export error:', e);
+                    this.showStatus('databaseStatus', `❌ Export failed: ${e.message}`, 'error');
                 } finally {
                     this.setButtonNormal('exportAllBtn', 'exportAllButtonText', '📊 Export All to Excel');
                 }
@@ -1941,7 +1952,6 @@ Example:
                 } catch (error) {
                     console.error('Matching error:', error);
                     this.showStatus('matchStatus', `❌ AI Matching failed: ${error.message}. Please try again.`, 'error');
-                    // No fallback to basic matching to avoid misleading 100% results
                 } finally {
                     this.setButtonNormal('matchBtn', 'matchButtonText', '🎯 Find Matching Candidates');
                 }
@@ -2091,10 +2101,10 @@ Example:
                 let skillsHTML = '';
                 
                 if (skills.technical_skills && skills.technical_skills.length > 0) {
-                    skillsHTML += `<p><strong>Technical:</strong> ${skills.technical_skills.join(', ')}</p>`;
+                    skillsHTML += `<p><strong>Technical Skills:</strong> ${skills.technical_skills.join(', ')}</p>`;
                 }
                 if (skills.programming_languages && skills.programming_languages.length > 0) {
-                    skillsHTML += `<p><strong>Programming:</strong> ${skills.programming_languages.join(', ')}</p>`;
+                    skillsHTML += `<p><strong>Programming Languages:</strong> ${skills.programming_languages.join(', ')}</p>`;
                 }
                 if (skills.frameworks_tools && skills.frameworks_tools.length > 0) {
                     skillsHTML += `<p><strong>Frameworks/Tools:</strong> ${skills.frameworks_tools.join(', ')}</p>`;
@@ -2392,10 +2402,10 @@ Example:
                 return projects.map(project => `
                     <div class="project-item">
                         <div class="project-header">
-                            <strong>${project.name || project.title || 'Not given'}</strong>
+                            <strong>${project.name || 'Project name not specified'}</strong>
                         </div>
                         <div class="project-description">
-                            <strong>Description:</strong> ${project.description || 'Not given'}
+                            <strong>Description:</strong> ${project.description || ''}
                         </div>
                         <div class="project-tech">
                             <strong>Technologies:</strong> ${project.technologies && project.technologies.length > 0 ? project.technologies.join(', ') : 'Not given'}
@@ -2427,7 +2437,7 @@ Example:
                             <strong>Date:</strong> ${award.date || 'Not given'}
                         </div>
                         <div class="award-description">
-                            <strong>Description:</strong> ${award.description || 'Not given'}
+                            <strong>Description:</strong> ${award.description || ''}
                         </div>
                     </div>
                 `).join('');
@@ -2448,7 +2458,7 @@ Example:
                             <strong>Duration:</strong> ${work.duration || 'Not given'}
                         </div>
                         <div class="volunteer-description">
-                            <strong>Description:</strong> ${work.description || 'Not given'}
+                            <strong>Description:</strong> ${work.description || ''}
                         </div>
                     </div>
                 `).join('');
@@ -2466,7 +2476,7 @@ Example:
                             ${exp.company ? ` at ${exp.company}` : ' at Not given'}
                         </div>
                         <div class="exp-duration">
-                            <strong>Duration:</strong> ${exp.start_date || 'Not given'} - ${exp.end_date || 'Not given'}
+                            <strong>Duration:</strong> ${exp.start_date || ''} - ${exp.end_date || ''}
                             ${exp.duration ? ` (${exp.duration})` : ''}
                         </div>
                         <div class="exp-location">
@@ -2476,7 +2486,7 @@ Example:
                             <div class="exp-description">
                                 <strong>Description:</strong> ${exp.description}
                             </div>
-                        ` : '<div class="exp-description"><strong>Description:</strong> Not given</div>'}
+                        ` : ''}
                         ${exp.responsibilities && exp.responsibilities.length > 0 ? `
                             <div class="exp-responsibilities">
                                 <strong>Key Responsibilities:</strong>
@@ -2484,7 +2494,7 @@ Example:
                                     ${exp.responsibilities.map(resp => `<li>${resp}</li>`).join('')}
                                 </ul>
                             </div>
-                        ` : '<div class="exp-responsibilities"><strong>Key Responsibilities:</strong> Not given</div>'}
+                        ` : ''}
                         ${exp.achievements && exp.achievements.length > 0 ? `
                             <div class="exp-achievements">
                                 <strong>Achievements:</strong>
@@ -2492,7 +2502,7 @@ Example:
                                     ${exp.achievements.map(ach => `<li>${ach}</li>`).join('')}
                                 </ul>
                             </div>
-                        ` : '<div class="exp-achievements"><strong>Achievements:</strong> Not given</div>'}
+                        ` : ''}
                     </div>
                 `).join('');
             }
@@ -3123,13 +3133,13 @@ Example:
                         console.warn('Sheet formatting setup failed:', e);
                     }
 
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "All CVs Database");
+                    
                     // Optional second sheet with education periods
                     const eduRows = this.buildEducationPeriodsSheetData(cvs);
-                    const wsEdu = XLSX.utils.json_to_sheet(eduRows, { skipHeader: false });
-
-                    const wb = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb, ws, 'CVs');
-                    XLSX.utils.book_append_sheet(wb, wsEdu, 'Education Periods');
+                    const wsEdu = XLSX.utils.json_to_sheet(eduRows);
+                    XLSX.utils.book_append_sheet(wb, wsEdu, "Education Periods");
 
                     const ts = new Date().toISOString().replace(/[:T]/g, '-').split('.')[0];
                     const filename = `cv-database-${ts}.xlsx`;
@@ -3362,93 +3372,14 @@ Example:
                 document.body.style.background = '';
             });
 
-            // Auto-refresh database stats every 30 seconds
-            setInterval(() => {
-                app.checkConnection();
-            }, 30000);
-
-            // Add smooth scrolling for better UX
-            document.documentElement.style.scrollBehavior = 'smooth';
-
-            // Initialize tooltips for keyboard shortcuts
-            const shortcuts = [
-                { element: 'parseBtn', shortcut: 'Ctrl+Enter' },
-                { element: 'exportAllBtn', shortcut: 'Ctrl+E' },
-                { element: 'refreshBtn', shortcut: 'Ctrl+R' },
-                { element: 'matchBtn', shortcut: 'Ctrl+M' },
-                { element: 'uploadArea', shortcut: 'Ctrl+U' }
-            ];
-
-            shortcuts.forEach(({ element, shortcut }) => {
-                const el = document.getElementById(element);
-                if (el) {
-                    el.title = `${el.title || ''} (${shortcut})`.trim();
+            // Prevent accidental page refresh when there are unsaved files
+            window.addEventListener('beforeunload', function(e) {
+                if (app.files && app.files.length > 0) {
+                    e.preventDefault();
+                    e.returnValue = 'You have uploaded files that haven\'t been parsed yet. Are you sure you want to leave?';
                 }
             });
-
-            // Add real-time character count for requirements input
-            const requirementsInput = document.getElementById('requirementsInput');
-            const createCharCounter = () => {
-                const counter = document.createElement('div');
-                counter.style.cssText = `
-                    position: absolute;
-                    bottom: 0.5rem;
-                    right: 1rem;
-                    font-size: 0.8rem;
-                    opacity: 0.6;
-                    background: rgba(0,0,0,0.5);
-                    padding: 0.25rem 0.5rem;
-                    border-radius: 4px;
-                `;
-                requirementsInput.parentNode.style.position = 'relative';
-                requirementsInput.parentNode.appendChild(counter);
-                return counter;
-            };
-
-            const charCounter = createCharCounter();
-            requirementsInput.addEventListener('input', () => {
-                const length = requirementsInput.value.length;
-                charCounter.textContent = `${length} characters`;
-                charCounter.style.color = length > 500 ? '#f59e0b' : '#9ca3af';
-            });
-
-            console.log('🚀 CV Parser Pro initialized successfully!');
-            console.log('📋 Features: Backend API integration, Persistent database, Real-time stats, AI matching');
-            console.log('⌨️  Keyboard shortcuts: Ctrl+U (upload), Ctrl+Enter (parse), Ctrl+E (export), Ctrl+R (refresh), Ctrl+M (match)');
-            console.log('🎨 Enhanced UI with better visual hierarchy and responsive design');
-        });
-
-        // Add some nice hover effects and interactions
-        document.addEventListener('mouseover', function(e) {
-            if (e.target.classList.contains('stat-card')) {
-                e.target.style.transform = 'translateY(-3px) scale(1.02)';
-            }
-        });
-
-        document.addEventListener('mouseout', function(e) {
-            if (e.target.classList.contains('stat-card')) {
-                e.target.style.transform = '';
-            }
-        });
-
-        // Error handling for network issues
-        window.addEventListener('offline', function() {
-            document.getElementById('connectionStatus').textContent = '📡 Offline Mode';
-            document.getElementById('connectionStatus').className = 'connection-status disconnected';
-        });
-
-        window.addEventListener('online', function() {
-            app.checkConnection();
-        });
-
-        // Prevent accidental page refresh when there are unsaved files
-        window.addEventListener('beforeunload', function(e) {
-            if (app.files && app.files.length > 0) {
-                e.preventDefault();
-                e.returnValue = 'You have uploaded files that haven\'t been parsed yet. Are you sure you want to leave?';
-            }
         });
     </script>
 </body>
 </html>
-                        
