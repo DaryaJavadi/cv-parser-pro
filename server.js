@@ -303,6 +303,9 @@ app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(express.static('public'));
 app.use('/api/', limiter);
 
+// Prevent noisy 404 for favicon in logs
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // ================= Embedding utilities (SentenceTransformer-like) =================
 async function getEmbeddingPipeline() {
     if (!embeddingPipeline) {
